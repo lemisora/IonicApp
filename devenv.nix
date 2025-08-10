@@ -1,45 +1,83 @@
-{ pkgs, lib, config, inputs, ... }:
-
 {
-  # https://devenv.sh/basics/
-  env.GREET = "devenv";
+  pkgs,
+  lib,
+  config,
+  inputs,
+  ...
+}:
 
-  # https://devenv.sh/packages/
-  packages = [ pkgs.git ];
+let
+  # importa el nixpkgs-unstable que declaraste en devenv.yaml
+  unstable = import inputs.nixpkgs-unstable { system = pkgs.stdenv.system; };
 
-  # https://devenv.sh/languages/
-  # languages.rust.enable = true;
+  # la derivación que queremos (esperamos nodejs_18 = 18.19.0 en esa revisión)
+  nodeFromUnstable = unstable.nodejs_18;
+in
+{
+  # Ponemos overlay para exponer/forzar nodejs a la versión importada:
+  overlays = [
+    (final: prev: {
+      # Reemplazamos nodejs y exponemos nodejs_18 para evitar confusiones
+      nodejs = nodeFromUnstable;
+    })
+  ];
 
-  # https://devenv.sh/processes/
-  # processes.cargo-watch.exec = "cargo-watch";
+  packages = with pkgs; [
+    git
+    openssl
+    pnpm
+  ];
 
-  # https://devenv.sh/services/
-  # services.postgres.enable = true;
+  languages = {
+    javascript = {
+      enable = true;
 
-  # https://devenv.sh/scripts/
-  scripts.hello.exec = ''
-    echo hello from $GREET
+      # indicamos explícitamente el "node" que queremos usar en herramientas JS
+      # (por defecto devenv usa pkgs.nodejs-slim; aquí forzamos nodejs_18).
+      package = pkgs.nodejs;
+
+      npm = {
+        enable = true;
+        # el paquete npm por defecto viene con node; si quieres usar
+        # un package npm separado podrías poner pkgs.nodePackages.npm
+        # package = pkgs.nodejs;
+        install.enable = false; # We'll control installs manually below
+      };
+
+      pnpm = {
+        enable = true;
+        package = pkgs.nodePackages.pnpm;
+        install.enable = true; # corre pnpm install si hay package.json
+      };
+    };
+  };
+
+  # Script para instalar Angular CLI e Ionic solo cuando quieras
+  scripts.setup-dev.exec = ''
+    echo "→ Instalando Angular CLI 16.2.11 e Ionic CLI localmente..."
+    pnpm add -D @angular/cli@16.2.11 @ionic/cli
+    echo "✅ Herramientas instaladas en node_modules/.bin"
   '';
 
   enterShell = ''
-    hello
-    git --version
+    echo "🔧 Node: $(node -v) | npm: $(npm -v) | pnpm: $(pnpm -v)"
+        export PATH="$PWD/node_modules/.bin:$PATH"
+        export NODE_OPTIONS="--openssl-legacy-provider"
+
+        if command -v ng >/dev/null; then
+          echo "✅ Angular CLI detectado: $(ng version | head -n 10)"
+        else
+          echo "⚠️ Angular CLI no instalado. Ejecuta: devenv run setup-dev"
+        fi
+
+        if command -v ionic >/dev/null; then
+          echo "✅ Ionic CLI detectado: $(ionic --version)"
+        else
+          echo "⚠️ Ionic CLI no instalado. Ejecuta: devenv run setup-dev"
+        fi
   '';
 
-  # https://devenv.sh/tasks/
-  # tasks = {
-  #   "myproj:setup".exec = "mytool build";
-  #   "devenv:enterShell".after = [ "myproj:setup" ];
-  # };
-
-  # https://devenv.sh/tests/
   enterTest = ''
-    echo "Running tests"
-    git --version | grep --color=auto "${pkgs.git.version}"
+    echo "Test: git: $(git --version)"
   '';
-
-  # https://devenv.sh/git-hooks/
-  # git-hooks.hooks.shellcheck.enable = true;
-
-  # See full reference at https://devenv.sh/reference/options/
 }
