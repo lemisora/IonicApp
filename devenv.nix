@@ -14,6 +14,12 @@ let
   nodeFromUnstable = unstable.nodejs_18;
 in
 {
+
+  # Variables de entorno
+  env = {
+    PROJECT_DIR = "./nixy";
+  };
+
   # Ponemos overlay para exponer/forzar nodejs a la versión importada:
   overlays = [
     (final: prev: {
@@ -58,6 +64,9 @@ in
     pnpm add -D @angular/cli@16.2.11 @ionic/cli
     echo "✅ Herramientas instaladas en node_modules/.bin"
   '';
+
+  # Proceso para levantar ionic serve
+  processes.ionic-dev.exec = "cd \$PROJECT_DIR && ionic serve";
 
   enterShell = ''
     echo "🔧 Node: $(node -v) | npm: $(npm -v) | pnpm: $(pnpm -v)"
