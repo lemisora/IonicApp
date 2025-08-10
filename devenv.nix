@@ -31,7 +31,6 @@ in
   packages = with pkgs; [
     git
     openssl
-    pnpm
   ];
 
   languages = {
@@ -49,41 +48,50 @@ in
         # package = pkgs.nodejs;
         install.enable = false; # We'll control installs manually below
       };
-
-      pnpm = {
-        enable = true;
-        package = pkgs.nodePackages.pnpm;
-        install.enable = true; # corre pnpm install si hay package.json
-      };
     };
   };
 
-  # Script para instalar Angular CLI e Ionic solo cuando quieras
-  scripts.setup-dev.exec = ''
-    echo "→ Instalando Angular CLI 16.2.11 e Ionic CLI localmente..."
-    pnpm add -D @angular/cli@16.2.11 @ionic/cli
-    echo "✅ Herramientas instaladas en node_modules/.bin"
-  '';
+  tasks = {
+    "project:clean" = {
+      exec = ''
+        echo "🧹 Limpiando dependencias (node_modules, package-lock.json) y reinstalando..."
+        rm -rf node_modules package-lock.json
+        npm cache clean --force
+        echo "✅ Limpieza completa"
+      '';
+    };
+    "project:setup-dev" = {
+      exec = ''
+        echo "→ Instalando @angular/cli@16.2.11 y @ionic/cli localmente (devDependencies)..."
+        npm install --no-audit --no-fund --save-dev @angular/cli@16.2.11 @ionic/cli
+        echo "✅ Herramientas instaladas en node_modules/.bin"
+      '';
+    };
+  };
 
   # Proceso para levantar ionic serve
   processes.ionic-dev.exec = "cd \$PROJECT_DIR && ionic serve";
 
   enterShell = ''
-    echo "🔧 Node: $(node -v) | npm: $(npm -v) | pnpm: $(pnpm -v)"
-        export PATH="$PWD/node_modules/.bin:$PATH"
-        export NODE_OPTIONS="--openssl-legacy-provider"
+    echo "🔧 Node: $(node -v) | npm: $(npm -v)"
+    export PATH="$PWD/node_modules/.bin:$PATH"
+    export NODE_OPTIONS="--openssl-legacy-provider"
 
-        if command -v ng >/dev/null; then
-          echo "✅ Angular CLI detectado: $(ng version | head -n 10)"
-        else
-          echo "⚠️ Angular CLI no instalado. Ejecuta: devenv run setup-dev"
-        fi
+    if command -v ng >/dev/null; then
+      echo "✅ Angular CLI detectado: $(ng version | head -n 10)"
+    else
+      echo "⚠️ Angular CLI no instalado. Ejecuta: devenv tasks run project:setup-dev"
+    fi
 
-        if command -v ionic >/dev/null; then
-          echo "✅ Ionic CLI detectado: $(ionic --version)"
-        else
-          echo "⚠️ Ionic CLI no instalado. Ejecuta: devenv run setup-dev"
-        fi
+    if command -v ionic >/dev/null; then
+      echo "✅ Ionic CLI detectado: $(ionic --version)"
+    else
+      echo "⚠️ Ionic CLI no instalado. Ejecuta: devenv run project:setup-dev"
+    fi
+
+    echo "Para iniciar el servidor en background: devenv up ionic-dev"
+    echo "Para detener todos los procesos: devenv down"
+    echo "Para limpiar (npm): devenv tasks run project:clean"
   '';
 
   enterTest = ''
